@@ -105,7 +105,9 @@ online-accounts = Contas Online
 
 # Bluetooth
 
+activate = Ativar
 confirm = Confirmar
+enable = Habilitar
 
 bluetooth = Bluetooth
     .desc = Gerenciamento de Dispositivos Bluetooth
@@ -117,6 +119,9 @@ bluetooth = Bluetooth
     .disconnect = Desconectar
     .forget = Esquecer
     .dbus-error = Ocorreu um erro ao interagir com o DBus: { $why }
+    .disabled = O serviço de bluetooth está desabilitado
+    .inactive = O serviço de bluetooth não está ativo
+    .unknown = O serviço de bluetooth não pôde ser ativado. O pacote "bluez" está instalado?
 
 bluetooth-paired = Dispositivos Conectados Anteriormente
     .connect = Conectar
@@ -136,6 +141,7 @@ accessibility = Acessibilidade
     .on = Ligado
     .off = Desligado
     .unavailable = Indisponível
+    .screen-reader = Leitor de tela
     .high-contrast = Modo de alto contraste
     .invert-colors = Inverter cores
     .color-filters = Filtros de cores
@@ -144,7 +150,7 @@ hearing = Ouvindo
     .mono = Reproduzir áudio estéreo como mono
 
 default = Padrão
-magnifier = Ampliador de Tela
+magnifier = Ampliador de tela
     .controls = Ou use teclas de atalho: { $zoom_in ->
              [zero] {""}
             *[other] {""}
@@ -154,12 +160,12 @@ magnifier = Ampliador de Tela
             *[other] {""}
                 {$zoom_out} para diminuir o zoom,
         }
-        Super + rolar com o mouse
-    .scroll_controls = Habilitar atalhos "Super + Scroll" (via mouse ou touchpad)
+        Super + Scroll para rolar com o mouse
+    .scroll_controls = Habilitar atalho "Super + Scroll" (via mouse ou touchpad)
     .show_overlay = Mostrar a sobreposição do ampliador
     .increment = Incremento de zoom
     .signin = Iniciar o ampliador ao fazer login
-    .applet = Ativar/desativar o ampliador no miniaplicativo do painel
+    .applet = Ativar/desativar a lupa no miniaplicativo do painel
     .movement = A visualização ampliada se move
     .continuous = Continuamente com ponteiro
     .onedge = Quando o ponteiro atinge a borda
@@ -197,10 +203,13 @@ fit-to-screen = Ajustar à Tela
 open-new-folder = Abrir Nova Pasta
 recent-folders = Pastas Recentes
 
-x-minutes = { $number } minutos
-x-hours = { $number ->
-    [1] 1 hora
-    *[other] { $number } horas
+x-minutes = { $number } { $number ->
+    [one] minuto
+    *[other] minutos
+}
+x-hours = { $number } { $number ->
+    [one] hora
+    *[other] horas
 }
 never = Nunca
 
@@ -225,8 +234,8 @@ mode-and-colors = Modo e Cores
 recent-colors = Cores recentes
 reset-to-default = Restaurar padrão
 rgb = RGB
-window-hint-accent = Cor de destaque da janela ativa
-window-hint-accent-toggle = Utilizar a cor de destaque do tema como destaque de janela ativa
+window-hint-accent = Cor de realce da janela ativa
+window-hint-accent-toggle = Utilizar a cor de destaque do tema como realce de janela ativa
 
 auto-switch = Alternar automaticamente do modo Claro para o modo Escuro
     .sunrise = Altera para o modo Claro ao nascer do sol
@@ -294,18 +303,18 @@ drop-here = Solte os miniaplicativos aqui
 end-segment = Segmento final
 large = Grande
 no-applets-found = Nenhum miniaplicativo encontrado...
-panel-bottom = Inferior
-panel-left = Esquerda
-panel-right = Direita
-panel-top = Superior
+panel-bottom = Lado inferior
+panel-left = Lado esquerdo
+panel-right = Lado direito
+panel-top = Lado superior
 search-applets = Procurar por miniaplicativos...
 small = Pequeno
 start-segment = Segmento inicial
 
 panel-appearance = Aparência
-    .match = Corresponder à área de trabalho
-    .light = Claro
-    .dark = Escuro
+    .match = Estilo do sistema
+    .light = Estilo claro
+    .dark = Estilo escuro
 
 panel-behavior-and-position = Comportamento e Posições
     .autohide = Ocultar o painel automaticamente
@@ -323,7 +332,7 @@ panel-style = Estilo
     .background-opacity = Opacidade do fundo
 
 panel-applets = Configuração
-    .dock-desc = Configurar miniaplicativos do dock
+    .dock-desc = Configurar miniaplicativos da dock
     .desc = Configurar miniaplicativos do painel
 
 panel-missing = Configuração do painel está ausente
@@ -394,21 +403,21 @@ color = Cor
     .sidebar = Perfis de cor
     .temperature = Temperatura de cor
 
-display = Monitores
+display = Telas
     .desc = Gerencie monitores, altere gráficos, e luz noturna
     .arrangement = Organização dos Monitores
     .arrangement-desc = Arraste os monitores para rearranjá-los.
     .enable = Ativar monitor
     .external = { $size } { $output } Monitor Externo
     .laptop = { $size } Tela do notebook
-    .options = Opções do Monitor
+    .options = Opções de Tela
     .refresh-rate = Taxa de atualização
     .resolution = Resolução
     .scale = Escala
-    .additional-scale-options = Opções de escala adicionais
+    .additional-scale-options = Ajuste de escala
 
 mirroring = Espelhar
-    .id = Espelhar { $id }
+    .id = Espelhando { $id }
     .dont = Não espelhar
     .mirror = Espelhar { $display }
     .project = Projetar para { $display ->
@@ -493,7 +502,7 @@ battery = Bateria
   }
   .less-than-minute = Menos de 1 minuto
   .and = e
-  .remaining-time = { $time } até { $action ->
+  .remaining-time = { $time } até estar { $action ->
         [full] cheia
        *[other] vazia
    }
@@ -683,6 +692,7 @@ system-shortcut = Sistema
     .play-pause = Iniciar/Pausar
     .play-next = Próxima faixa
     .play-prev = Faixa anterior
+    .poweroff = Desligar
     .screenshot = Fazer uma captura de tela
     .terminal = Abrir o terminal
     .volume-lower = Reduzir o volume da saída de áudio
@@ -799,15 +809,15 @@ applications = Aplicativos
 
 default-apps = Aplicativos Padrão
     .desc = Navegador web, cliente de email, gestor de arquivos e outros aplicativos padrões.
-    .web-browser = Navegador web
-    .file-manager = Gestor de arquivos
-    .mail-client = Cliente de email
+    .web-browser = Navegador Web
+    .file-manager = Gestor de Arquivos
+    .mail-client = Cliente de Email
     .music = Música
     .video = Vídeo
     .photos = Fotos
     .calendar = Calendário
     .terminal = Terminal
-    .other-associations = Outras associações
+    .other-associations = Outras Associações
     .text-editor = Editor de Texto
 
 ## Applications: Startup Applications

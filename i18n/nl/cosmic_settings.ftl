@@ -1,4 +1,4 @@
-app = COSMIC-instellingen
+app = COSMIC Instellingen
 
 dbus-connection-error = Kon geen verbinding maken met DBus
 ok = Oké
@@ -9,9 +9,9 @@ number = { $number }
 ## Network & Wireless
 
 connections-and-profiles = { $variant ->
-    [wired] Bekabelde verbindingen
-    [wifi] Wifi
-    [vpn] VPN
+    [wired] Kabelverbindingen
+    [wifi] Wifiverbindingen
+    [vpn] VPN-verbindingen
     *[other] Onbekende verbindingen
 } en verbindingsprofielen.
 
@@ -22,7 +22,7 @@ airplane-on = Vliegtuigmodus is ingeschakeld.
 cable-unplugged = Kabel losgekoppeld
 connect = Verbinden
 connected = Verbonden
-connecting = Verbinding maken...
+connecting = Verbinding maken…
 disconnect = Verbinden verbreken
 forget = Vergeten
 known-networks = Bekende netwerken
@@ -30,7 +30,7 @@ network-and-wireless = Netwerk en wifi
 no-networks = Er zijn geen netwerken gevonden.
 no-vpn = Geen VPN-verbindingen beschikbaar.
 password = Wachtwoord
-password-confirm = Bevestig het wachtwoord
+password-confirm = Wachtwoord bevestigen
 remove = Verwijderen
 settings = Instellingen
 username = Gebruikersnaam
@@ -113,15 +113,15 @@ bluetooth = Bluetooth
     .desc = Bluetooth-apparaten bewerken
     .status = Dit systeem is zichtbaar als { $aliases } zolang de bluetooth-instellingen open staan.
     .connected = Verbonden
-    .connecting = Verbinding maken...
-    .disconnecting = Verbinding verbreken...
+    .connecting = Verbinding maken
+    .disconnecting = Verbinding verbreken
     .connect = Verbinden
     .disconnect = Verbinding verbreken
     .forget = Vergeten
     .dbus-error = Er is een fout opgetreden tijdens de interactie met DBus: { $why }
     .disabled = De bluetooth-service is uitgeschakeld
     .inactive = De bluetooth-service is niet actief
-    .unknown = Cosmic kon de bluetooth-service niet activeren. Heeft u bluez geïnstalleerd?
+    .unknown = De bluetooth-service kon niet worden geactiveerd. Is BlueZ geïnstalleerd?
 
 bluetooth-paired = Eerder verbonden apparaten
     .connect = Verbinden
@@ -141,6 +141,7 @@ accessibility = Toegankelijkheid
     .on = Aan
     .off = Uit
     .unavailable = Niet beschikbaar
+    .screen-reader = Schermverteller
     .high-contrast = Verhoogde contrast modus
     .invert-colors = Kleuren omkeren
     .color-filters = Kleurfilters
@@ -165,10 +166,10 @@ magnifier = Vergrootglas
     .increment = Zoom-stapgrootte
     .signin = Het vergrootglas direct gebruiken als u inlogt
     .applet = Met een panel-applet het vergrootglas in-/uitschakelen
-    .movement = Beweegt de vergroting
+    .movement = De vergroting beweegt mee
     .continuous = De vergroting volgt de muis
-    .onedge = Verplaats als de muis de randen raakt
-    .centered = Houd de muis steeds in het midden van de vergroting
+    .onedge = Verplaatst als de muis de randen raakt
+    .centered = Houdt de muis steeds in het midden van de vergroting
 color-filter = Type kleurfilter
     .unknown = Onbekend kleurfilter actief
     .greyscale = Grijstinten
@@ -202,9 +203,9 @@ fit-to-screen = Aan het scherm passend maken
 open-new-folder = Nieuwe map openen
 recent-folders = Recente mappen
 
-x-minutes = { $number ->
-        [1] 1 minuut
-        *[other] { $number } minuten
+x-minutes = { $number } { $number ->
+        [one] minuut
+        *[other] minuten
     }
 x-hours = { $number } uur
 never = Nooit
@@ -282,8 +283,8 @@ monospace-font = Lettertype met gelijke letterbreedte
 
 ## Desktop: Notifications
 
-notifications = Meldingen
-    .desc = Niet storen, meldingen op het vergrendelingsscherm en instellingen per applicatie.
+notifications = Meldingsinstellingen
+    .desc = 'Niet storen', meldingen op het vergrendelingsscherm en meldingsinstellingen per app.
 
 ## Desktop: Panel
 
@@ -343,7 +344,7 @@ dock = Dock
 ## Desktop: Window management
 
 window-management = Vensterbeheer
-    .desc = Actie van de supertoets, vensterbeheeropties en aanvullende opties voor het tegelen van vensters.
+    .desc = Opties voor de Supertoets, vensterbeheer en aanvullende opties voor het tegelen van vensters.
 
 super-key = Actie van de supertoets
     .launcher = Snelstarter openen
@@ -361,7 +362,7 @@ window-controls = Vensterbeheer
 focus-navigation = Focusbesturing
     .focus-follows-cursor = Focus volgt de cursor
     .focus-follows-cursor-delay = Vertraging voor focus volgt de cursor in ms
-    .cursor-follows-focus = De cursor volgt de focus
+    .cursor-follows-focus = De cursor volgt focus
 
 ## Desktop: Workspaces
 
@@ -412,10 +413,8 @@ display = Beeldschermen
     .scale = Schaal
     .additional-scale-options = Extra schalingsopties
 
-mirroring = Mirroring
-
 mirroring = Scherm dupliceren
-    .id = Dupliceren { $id }
+    .id = { $id } dupliceren
     .dont = Niet dupliceren
     .mirror = { $display } dupliceren
     .project = Naar { $display ->
@@ -486,22 +485,23 @@ power = Enegrie en batterij
     .desc = Energieverbruik beheren
 
 battery = Batterij
-  .minute = { $value } { $value ->
+    .minute = { $value } { $value ->
         [one] minuut
-       *[other] minuten
-  }
-  .hour = { $value } uur
-  }
-  .day = { $value } { $value ->
+        *[other] minuten
+    }   
+    .hour = { $value } uur
+
+
+    .day = { $value } { $value ->
         [one] dag
-       *[other] dagen
-  }
-  .less-than-minute = In minder dan één minuut
-  .and = en
-  .remaining-time = { $time } { $action ->
+        *[other] dagen
+    }
+    .less-than-minute = In minder dan één minuut
+    .and = en
+    .remaining-time = De batterij is over { $time } { $action -> 
         [full] opgeladen
-       *[other] leeg
-   }
+        *[other] leeg
+    }
 
 connected-devices = Verbonden apparaten
   .unknown = Onbekend apparaat
@@ -778,7 +778,7 @@ time-format = Datum- en tijdweergave
     .monday = Maandag
 
 time-region = Taal en regio
-    .desc = Regionale datum- en tijd- en getalweergave.
+    .desc = Regionale datum-, tijd- en getalweergave.
 
 formatting = Opmaak
     .dates = Datum

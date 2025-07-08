@@ -259,7 +259,8 @@ impl page::Page<crate::pages::Message> for Page {
                                             .push(text::caption(crate::fl!(
                                                 "administrator",
                                                 "desc"
-                                            ))),
+                                            )))
+                                            .width(Length::Fill),
                                     )
                                     .push(Space::new(5, 0))
                                     .push(admin_toggler)
@@ -433,7 +434,7 @@ impl Page {
             Message::SelectProfileImage(uid) => {
                 return cosmic::task::future(async move {
                     let dialog_result = file_chooser::open::Dialog::new()
-                        .title(fl!("wallpaper", "folder-dialog"))
+                        .title(fl!("users", "profile-add"))
                         .accept_label(fl!("dialog-add"))
                         .modal(false)
                         .open_file()
@@ -777,8 +778,9 @@ fn user_list() -> Section<crate::pages::Message> {
                                 column::with_capacity(2)
                                     .push(text::body(crate::fl!("administrator")))
                                     .push(text::caption(crate::fl!("administrator", "desc")))
+                                    .width(Length::Fill)
                                     .into(),
-                                widget::horizontal_space().width(Length::Fill).into(),
+                                Space::new(5, 0).into(),
                                 widget::toggler(user.is_admin)
                                     .on_toggle(|enabled| {
                                         Message::SelectedUserSetAdmin(user.id, enabled)

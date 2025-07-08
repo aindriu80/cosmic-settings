@@ -119,9 +119,9 @@ bluetooth = Bluetooth
     .disconnect = Disconnect
     .forget = Forget
     .dbus-error = An error has occurred while interacting with DBus: { $why }
-    .disabled = The bluetooth service is disabled
-    .inactive = The bluetooth service is not active
-    .unknown = The bluetooth service could not be activated. Is bluez installed?
+    .disabled = The Bluetooth service is disabled
+    .inactive = The Bluetooth service is not active
+    .unknown = The Bluetooth service could not be activated. Is BlueZ installed?
 
 bluetooth-paired = Previously Connected Devices
     .connect = Connect
@@ -141,6 +141,7 @@ accessibility = Accessibility
     .on = On
     .off = Off
     .unavailable = Unavailable
+    .screen-reader = Screen reader
     .high-contrast = High contrast mode
     .invert-colors = Invert Colors
     .color-filters = Color filters
@@ -202,10 +203,13 @@ fit-to-screen = Fit to Screen
 open-new-folder = Open new folder
 recent-folders = Recent Folders
 
-x-minutes = { $number } minutes
-x-hours = { $number ->
-    [1] 1 hour
-    *[other] { $number } hours
+x-minutes = { $number } { $number ->
+    [one] minute
+    *[other] minutes
+}
+x-hours = { $number } { $number ->
+    [one] hour
+    *[other] hours
 }
 never = Never
 
@@ -431,9 +435,9 @@ night-light = Night Light
 
 orientation = Orientation
     .standard = Standard
-    .rotate-90 = Rotate 90
-    .rotate-180 = Rotate 180
-    .rotate-270 = Rotate 270
+    .rotate-90 = Rotate 90°
+    .rotate-180 = Rotate 180°
+    .rotate-270 = Rotate 270°
 
 vrr = Variable refresh rate
     .enabled = Enabled
@@ -640,6 +644,7 @@ nav-shortcuts = Navigation
 manage-windows = Manage windows
     .close = Close window
     .maximize = Maximize window
+    .fullscreen = Fullscreen window
     .minimize = Minimize window
     .resize-inwards = Resize window inwards
     .resize-outwards = Resize window outwards
@@ -688,6 +693,7 @@ system-shortcut = System
     .play-pause = Play/Pause
     .play-next = Next track
     .play-prev = Previous track
+    .poweroff = Power off
     .screenshot = Take a screenshot
     .terminal = Open a terminal
     .volume-lower = Decrease audio output volume
@@ -859,7 +865,7 @@ about = About
     .desc = Device name, hardware information, operating system defaults.
 
 about-device = Device name
-    .desc = This name appears to other network or bluetooth devices.
+    .desc = This name appears to other network or Bluetooth devices.
 
 about-hardware = Hardware
     .model = Hardware model

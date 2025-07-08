@@ -28,6 +28,7 @@ use itertools::Itertools;
 use shortcuts::action::System as SystemAction;
 use slab::Slab;
 use slotmap::{DefaultKey, Key, SecondaryMap, SlotMap};
+use std::collections::BTreeSet;
 use std::io;
 
 pub struct Page {
@@ -148,6 +149,70 @@ impl page::Page<crate::pages::Message> for Page {
             self.shortcuts_context = cosmic_settings_config::shortcuts::context().ok();
         }
 
+        self.reload_search();
+
+        Task::none()
+    }
+
+    fn on_leave(&mut self) -> Task<crate::pages::Message> {
+        self.clear();
+        Task::none()
+    }
+}
+
+impl Page {
+    pub fn update(&mut self, message: Message) -> Task<crate::app::Message> {
+        match message {
+            Message::Category(category) => match category {
+                Category::Custom => {
+                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.custom))
+                }
+
+                Category::ManageWindow => {
+                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.manage_window))
+                }
+
+                Category::MoveWindow => {
+                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.move_window))
+                }
+
+                Category::Nav => {
+                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.nav))
+                }
+
+                Category::System => {
+                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.system))
+                }
+
+                Category::WindowTiling => {
+                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.window_tiling))
+                }
+            },
+
+            Message::Search(input) => {
+                self.search(input);
+                Task::none()
+            }
+
+            Message::SearchShortcut(message) => self.search_model.update(message),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.search.actions = SlotMap::new();
+        self.search.localized = SecondaryMap::new();
+        self.search.input = String::new();
+        self.search_model.on_clear();
+        self.modified.custom = 0;
+        self.modified.manage_windows = 0;
+        self.modified.move_windows = 0;
+        self.modified.nav = 0;
+        self.modified.system = 0;
+    }
+
+    fn reload_search(&mut self) {
+        self.clear();
+
         if let Some(context) = self.shortcuts_context.as_ref() {
             let mut defaults = context.get::<Shortcuts>("defaults").unwrap_or_default();
             let custom = context.get::<Shortcuts>("custom").unwrap_or_default();
@@ -199,72 +264,21 @@ impl page::Page<crate::pages::Message> for Page {
             defaults.0.extend(custom.0);
             self.search.shortcuts = defaults;
         }
-
-        Task::none()
-    }
-
-    fn on_leave(&mut self) -> Task<crate::pages::Message> {
-        self.search.actions = SlotMap::new();
-        self.search.localized = SecondaryMap::new();
-        self.search.input = String::new();
-        self.search_model.on_clear();
-        self.modified.custom = 0;
-        self.modified.manage_windows = 0;
-        self.modified.move_windows = 0;
-        self.modified.nav = 0;
-        self.modified.system = 0;
-        Task::none()
-    }
-}
-
-impl Page {
-    pub fn update(&mut self, message: Message) -> Task<crate::app::Message> {
-        match message {
-            Message::Category(category) => match category {
-                Category::Custom => {
-                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.custom))
-                }
-
-                Category::ManageWindow => {
-                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.manage_window))
-                }
-
-                Category::MoveWindow => {
-                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.move_window))
-                }
-
-                Category::Nav => {
-                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.nav))
-                }
-
-                Category::System => {
-                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.system))
-                }
-
-                Category::WindowTiling => {
-                    cosmic::task::message(crate::app::Message::Page(self.sub_pages.window_tiling))
-                }
-            },
-
-            Message::Search(input) => {
-                self.search(input);
-                Task::none()
-            }
-
-            Message::SearchShortcut(message) => self.search_model.update(message),
-        }
     }
 
     fn search(&mut self, input: String) {
-        self.search.input = input;
-        if self.search.input.is_empty() {
+        self.reload_search();
+
+        if input.is_empty() {
             self.search_model.on_clear();
             return;
         }
+
         if self.search.actions.is_empty() {
             self.search.cache_localized_actions();
         }
 
+        self.search.input = input;
         self.search_model.shortcut_models = self.search.shortcut_models();
     }
 }
@@ -320,6 +334,10 @@ impl Search {
             let id = self.actions.insert(action.clone());
             self.localized.insert(id, localized);
         }
+        // Remove unicode isolation characters to fix searching localized text that has them.
+        for (_, localized) in self.localized.iter_mut() {
+            *localized = localized.replace("\u{2068}", "").replace("\u{2069}", "");
+        }
     }
 
     fn retrieve_custom_actions(&self) -> Vec<(Binding, Action)> {
@@ -341,10 +359,29 @@ impl Search {
     }
 
     fn shortcut_models(&mut self) -> Slab<ShortcutModel> {
+        let shortcut_search_actions = match Binding::from_str_partial(&self.input) {
+            Ok(input_binding) => self
+                .shortcuts
+                .iter()
+                .filter_map(|(binding, action)| {
+                    if input_binding.is_subset(binding) {
+                        Some(action)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<BTreeSet<_>>(),
+            Err(_) => Default::default(),
+        };
+
         let input = self.input.to_lowercase();
+
         self.actions
             .iter()
-            .filter(|(id, _)| self.localized[*id].to_lowercase().contains(&input))
+            .filter(|(id, action)| {
+                self.localized[*id].to_lowercase().contains(&input)
+                    || shortcut_search_actions.contains(action)
+            })
             .fold(Slab::new(), |mut slab, (_, action)| {
                 slab.insert(ShortcutModel::new(
                     &self.defaults,
@@ -477,6 +514,7 @@ fn all_system_actions() -> &'static [Action] {
         Action::Focus(FocusDirection::Up),
         Action::LastWorkspace,
         Action::Maximize,
+        Action::Fullscreen,
         Action::MigrateWorkspaceToOutput(Direction::Down),
         Action::MigrateWorkspaceToOutput(Direction::Left),
         Action::MigrateWorkspaceToOutput(Direction::Right),
@@ -566,6 +604,7 @@ fn localize_action(action: &Action) -> String {
         Action::Workspace(i) => fl!("nav-shortcuts", "workspace", num = (*i as usize)),
         Action::LastWorkspace => fl!("nav-shortcuts", "last-workspace"),
         Action::Maximize => fl!("manage-windows", "maximize"),
+        Action::Fullscreen => fl!("manage-windows", "fullscreen"),
         Action::Minimize => fl!("manage-windows", "minimize"),
         Action::Move(Direction::Down) => fl!("move-windows", "direction", direction = "down"),
         Action::Move(Direction::Right) => fl!("move-windows", "direction", direction = "right"),
@@ -658,6 +697,7 @@ fn localize_action(action: &Action) -> String {
             SystemAction::PlayPause => fl!("system-shortcut", "play-pause"),
             SystemAction::PlayNext => fl!("system-shortcut", "play-next"),
             SystemAction::PlayPrev => fl!("system-shortcut", "play-prev"),
+            SystemAction::PowerOff => fl!("system-shortcut", "poweroff"),
             SystemAction::Screenshot => fl!("system-shortcut", "screenshot"),
             SystemAction::Terminal => fl!("system-shortcut", "terminal"),
             SystemAction::VolumeLower => fl!("system-shortcut", "volume-lower"),

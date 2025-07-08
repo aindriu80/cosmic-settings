@@ -73,6 +73,7 @@ struct Device {
 pub enum DeviceId {
     Alsa(u32),
     Bluez5(String),
+    Unknown(),
 }
 
 #[derive(Default)]
@@ -362,7 +363,7 @@ impl Page {
                 }
 
                 let mut command = None;
-                if let Some(&node_id) = self.sink_ids.get(self.active_sink.unwrap_or(0)) {
+                if !self.sink_ids.get(self.active_sink.unwrap_or(0)).is_none() {
                     command = Some(cosmic::task::future(async move {
                         tokio::time::sleep(Duration::from_millis(64)).await;
                         crate::pages::Message::Sound(Message::SinkBalanceApply)
@@ -420,6 +421,7 @@ impl Page {
                 let device_id = match device.variant {
                     pipewire::DeviceVariant::Alsa { alsa_card, .. } => DeviceId::Alsa(alsa_card),
                     pipewire::DeviceVariant::Bluez5 { address, .. } => DeviceId::Bluez5(address),
+                    pipewire::DeviceVariant::Unknown {} => DeviceId::Unknown {},
                 };
 
                 match device.media_class {

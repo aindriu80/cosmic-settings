@@ -63,7 +63,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 slab = "0.4.9"
 slotmap = "1.0.7"
 static_init = "1.0.3"
-sunrise = "1.2.1"
+sunrise = "2.1.0"
 tachyonix = "0.3.1"
 timedate-zbus = { git = "https://github.com/pop-os/dbus-settings-bindings", optional = true }
 tokio = { workspace = true, features = ["fs", "io-util", "sync"] }
@@ -74,10 +74,10 @@ upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings", option
 bluez-zbus = { git = "https://github.com/pop-os/dbus-settings-bindings", optional = true }
 url = "2.5.4"
 xkb-data = "0.2.1"
-zbus = { version = "4.4.0", default-features = false, features = [
+zbus = { version = "5.7.1", default-features = false, features = [
     "tokio",
 ], optional = true }
-zbus_polkit = { version = "4.0.0", optional = true }
+zbus_polkit = { version = "5.0.0", optional = true }
 fontdb = "0.23.0"
 fixed_decimal = "0.5.6"
 mime = "0.3.17"
@@ -93,7 +93,14 @@ pwhash = "1"
 [dependencies.cosmic-settings-subscriptions]
 git = "https://github.com/pop-os/cosmic-settings-subscriptions"
 #TODO: only select features as needed
-features = ["network_manager", "pipewire", "pulse", "bluetooth"]
+features = [
+    "cosmic_a11y_manager",
+    "accessibility",
+    "network_manager",
+    "pipewire",
+    "pulse",
+    "bluetooth",
+]
 optional = true
 
 [dependencies.icu]
@@ -110,7 +117,7 @@ git = "https://github.com/AerynOS/locales-rs"
 optional = true
 
 [features]
-default = ["a11y", "dbus-config", "linux", "single-instance", "wgpu"]
+default = ["a11y", "linux", "single-instance", "wgpu"]
 gettext = ["dep:gettext-rs"]
 
 # Default features for Linux

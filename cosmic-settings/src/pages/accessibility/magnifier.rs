@@ -18,7 +18,7 @@ use cosmic_settings_page::{
 use slotmap::SlotMap;
 use tracing::error;
 
-use super::{AccessibilityEvent, AccessibilityRequest, wayland};
+use super::{AccessibilityEvent, AccessibilityRequest, cosmic_a11y_manager as wayland};
 
 #[derive(Debug)]
 pub struct Page {
@@ -123,7 +123,7 @@ impl page::Page<crate::pages::Message> for Page {
 
     fn on_enter(&mut self) -> cosmic::Task<crate::pages::Message> {
         if self.wayland_thread.is_none() {
-            match wayland::spawn_wayland_connection() {
+            match wayland::spawn_wayland_connection(1) {
                 Ok((tx, mut rx)) => {
                     self.wayland_thread = Some(tx);
 
