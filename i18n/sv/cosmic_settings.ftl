@@ -419,7 +419,7 @@ online-accounts = Onlinekonton
 
 # Bluetooth
 
-activate = Aktivera    
+activate = Aktivera
 confirm = Bekräfta
 enable = Aktivera
 
@@ -568,10 +568,10 @@ change-password = Ändra lösenord
 remove-user = Ta bort användare
 full-name = Fullständigt namn
 invalid-username = Ogiltigt användarnamn.
- 
+
 
 password-mismatch = Lösenord och bekräftelse måste matcha.
- 
+
 
 save = Spara
 
@@ -614,9 +614,9 @@ power-mode = Strömalternativ
 
 power-saving = Energisparalternativ
     .turn-off-screen-after = Stäng av skärmen efter
-    .auto-suspend = Automatisk suspendering
-    .auto-suspend-ac = Automatisk suspendering vid inkoppling
-    .auto-suspend-battery = Automatisk suspendering på batteridrift
+    .auto-suspend = Automatiskt vänteläge
+    .auto-suspend-ac = Automatiskt vänteläge vid inkoppling
+    .auto-suspend-battery = Automatiskt vänteläge på batteridrift
 
 ## Input
 
@@ -885,7 +885,7 @@ legacy-app-scaling = X11 fönstersystem programsskalning
     .scaled-compatibility = Maximalt kompatibilitetsläge
     .compatibility-description = X11 program kan se suddiga ut på HiDPI-skärmar.
     .preferred-display = Föredragen skärm för spel och helskärms X11-program
-    .no-display = <Ingen>
+    .no-display = Ingen
 
 ## System: Uppstartsprogram
 

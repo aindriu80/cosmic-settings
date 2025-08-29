@@ -1,9 +1,10 @@
 use crate::pages::desktop::wallpaper::widgets::color_image;
 use cosmic::cosmic_theme::Spacing;
 use cosmic::cosmic_theme::palette::Srgba;
+use cosmic::iced::ContentFit;
 use cosmic::iced_core::{Alignment, Length};
 use cosmic::widget::icon::{from_name, icon};
-use cosmic::widget::{button, container, scrollable, settings, text};
+use cosmic::widget::{self, button, container, settings, text};
 use cosmic::{Apply, Element};
 use cosmic_settings_page::Section;
 use cosmic_settings_wallpaper as wallpaper;
@@ -35,7 +36,7 @@ pub fn section() -> Section<crate::pages::Message> {
                 .add(
                     settings::item::builder(&descriptions[label_keys["window_hint_toggle"]])
                         .toggler(
-                            theme_manager.custom_window_hint().is_some(),
+                            theme_manager.custom_window_hint().is_none(),
                             Message::UseDefaultWindowHint,
                         ),
                 );
@@ -187,54 +188,52 @@ fn accent_color_palette<'a>(
 ) -> impl Into<Element<'a, Message>> {
     let Spacing { space_xxs, .. } = cosmic::theme::spacing();
     let descriptions = &section.descriptions;
-    let palette = &page.theme_manager.builder().palette.as_ref();
     let accent = page.theme_manager.accent_palette().as_ref().unwrap();
-    let cur_accent = page
-        .theme_manager
-        .builder()
-        .accent
-        .map_or(palette.accent_blue, Srgba::from);
-    let mut accent_palette_row = cosmic::widget::row::with_capacity(accent.len());
+    let cur_accent = page.theme_manager.builder().accent.map_or_else(
+        || page.theme_manager.builder().palette.as_ref().accent_blue,
+        Srgba::from,
+    );
+    let mut accent_palette_row = Vec::with_capacity(accent.len());
 
     for &color in accent {
-        accent_palette_row = accent_palette_row.push(color_button(
-            Some(Message::PaletteAccent(color.into())),
-            color.into(),
-            cur_accent == color,
-            48,
-            48,
-        ));
+        accent_palette_row.push(
+            color_button(
+                Some(Message::PaletteAccent(color.into())),
+                color.into(),
+                cur_accent == color,
+                48,
+                48,
+            )
+            .into(),
+        );
     }
+
+    accent_palette_row.push(
+        if let Some(c) = page.drawer.custom_accent.get_applied_color() {
+            container(color_button(
+                Some(Message::DrawerOpen(ContextView::CustomAccent)),
+                c,
+                cosmic::iced::Color::from(cur_accent) == c,
+                48,
+                48,
+            ))
+        } else {
+            container(
+                page.drawer
+                    .custom_accent
+                    .picker_button(|_| Message::DrawerOpen(ContextView::CustomAccent), Some(24))
+                    .width(Length::Fixed(48.0))
+                    .height(Length::Fixed(48.0)),
+            )
+        }
+        .into(),
+    );
 
     cosmic::iced::widget::column![
         text::body(&descriptions[labels["accent_color"]]),
-        scrollable::horizontal(
-            accent_palette_row
-                .push(
-                    if let Some(c) = page.drawer.custom_accent.get_applied_color() {
-                        container(color_button(
-                            Some(Message::DrawerOpen(ContextView::CustomAccent)),
-                            c,
-                            cosmic::iced::Color::from(cur_accent) == c,
-                            48,
-                            48,
-                        ))
-                    } else {
-                        container(
-                            page.drawer
-                                .custom_accent
-                                .picker_button(
-                                    |_| Message::DrawerOpen(ContextView::CustomAccent),
-                                    Some(24),
-                                )
-                                .width(Length::Fixed(48.0))
-                                .height(Length::Fixed(48.0)),
-                        )
-                    }
-                )
-                .padding([0, 0, 16, 0])
-                .spacing(16)
-        )
+        widget::flex_row(accent_palette_row)
+            .padding([0, 0, 16, 0])
+            .spacing(16)
     ]
     .padding([16, 0, 0, 0])
     .spacing(space_xxs)
@@ -252,30 +251,38 @@ fn theme_mode<'a>(
     container(
         cosmic::iced::widget::row![
             cosmic::iced::widget::column![
-                button::custom(
+                button::custom_image_button(
                     icon(dark_mode_illustration)
-                        .width(Length::Fixed(191.0))
-                        .height(Length::Fixed(100.0))
+                        .content_fit(ContentFit::Contain)
+                        .width(Length::Fill)
+                        .height(Length::Fixed(100.0)),
+                    None
                 )
                 .class(button::ButtonClass::Image)
-                .padding([8, 0])
                 .selected(page.theme_manager.mode().is_dark)
-                .on_press(super::Message::DarkMode(true)),
+                .on_press(super::Message::DarkMode(true))
+                .padding(1)
+                .apply(widget::container)
+                .max_width(191),
                 text::body(&descriptions[labels["dark"]])
             ]
             .spacing(8)
             .width(Length::FillPortion(1))
             .align_x(Alignment::Center),
             cosmic::iced::widget::column![
-                button::custom(
-                    icon(light_mode_illustration,)
-                        .width(Length::Fixed(191.0))
-                        .height(Length::Fixed(100.0))
+                button::custom_image_button(
+                    icon(light_mode_illustration)
+                        .content_fit(ContentFit::Contain)
+                        .width(Length::Fill)
+                        .height(Length::Fixed(100.0)),
+                    None
                 )
                 .class(button::ButtonClass::Image)
                 .selected(!page.theme_manager.mode().is_dark)
-                .padding([8, 0])
-                .on_press(super::Message::DarkMode(false)),
+                .on_press(super::Message::DarkMode(false))
+                .padding(1)
+                .apply(widget::container)
+                .max_width(191),
                 text::body(&descriptions[labels["light"]])
             ]
             .spacing(8)
@@ -297,12 +304,15 @@ pub fn color_button<'a, Message: 'a + Clone>(
     width: u16,
     height: u16,
 ) -> Element<'a, Message> {
-    button::custom(color_image(
-        wallpaper::Color::Single([color.r, color.g, color.b]),
-        width,
-        height,
+    button::custom_image_button(
+        color_image(
+            wallpaper::Color::Single([color.r, color.g, color.b]),
+            width,
+            height,
+            None,
+        ),
         None,
-    ))
+    )
     .padding(0)
     .selected(selected)
     .class(button::ButtonClass::Image)
@@ -327,7 +337,7 @@ fn i18n() -> (slab::Slab<String>, HashMap<String, usize>) {
         ),
         (
             "auto_switch_desc/sunset".into(),
-            descriptions.insert(fl!("auto-switch", "sunrise")),
+            descriptions.insert(fl!("auto-switch", "sunset")),
         ),
         (
             "auto_switch_desc/next-sunrise".into(),
@@ -335,7 +345,7 @@ fn i18n() -> (slab::Slab<String>, HashMap<String, usize>) {
         ),
         (
             "auto_switch_desc/next-sunset".into(),
-            descriptions.insert(fl!("auto-switch", "next-sunrise")),
+            descriptions.insert(fl!("auto-switch", "next-sunset")),
         ),
         (
             "accent_color".into(),

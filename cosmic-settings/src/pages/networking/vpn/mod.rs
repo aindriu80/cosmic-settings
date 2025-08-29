@@ -163,7 +163,7 @@ enum PasswordFlag {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum VpnDialog {
+pub enum VpnDialog {
     Error(ErrorKind, String),
     Password {
         id: String,
@@ -683,6 +683,17 @@ impl Page {
                 });
             }
 
+            if let Err(why) = nmcli::add_fallback(&connection_name).await {
+                return Message::VpnDialogError(VpnDialog::Password {
+                    error: Some((ErrorKind::Config, why.to_string())),
+                    id: connection_name.clone(),
+                    uuid,
+                    username,
+                    password,
+                    password_hidden: true,
+                });
+            }
+
             if let Err(why) = nmcli::set_password_flags_none(&connection_name).await {
                 return Message::VpnDialogError(VpnDialog::Password {
                     error: Some((ErrorKind::WithPassword("password-flags"), why.to_string())),
@@ -998,7 +1009,8 @@ fn add_network() -> Task<crate::app::Message> {
 
                         return Message::AddWireGuardDevice(device, filename.to_owned(), path);
                     } else {
-                        super::nm_add_vpn_file("openvpn", response.url().path()).await
+                        super::nm_add_vpn_file("openvpn", response.url().to_file_path().unwrap())
+                            .await
                     };
 
                     match result {

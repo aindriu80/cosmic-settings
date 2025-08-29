@@ -8,13 +8,13 @@ use cosmic::iced_core::Color;
 
 use cosmic::Task;
 use cosmic::theme::ThemeType;
-use std::borrow::BorrowMut;
 use std::sync::Arc;
 
 use crate::app;
 
 use super::ContextView;
 
+#[derive(Debug)]
 pub enum ThemeStaged {
     Current,
     Both,
@@ -45,7 +45,15 @@ impl From<(Option<Config>, Option<Config>, Option<Vec<Srgba>>)> for ThemeCustomi
             Option<Vec<Srgba>>,
         ),
     ) -> Self {
-        let theme = Theme::get_entry(theme_config.as_ref().unwrap()).unwrap_or_default();
+        let theme = match Theme::get_entry(theme_config.as_ref().unwrap()) {
+            Ok(theme) => theme,
+            Err((errs, theme)) => {
+                for err in errs {
+                    tracing::warn!("Error while loading theme: {err:?}");
+                }
+                theme
+            }
+        };
 
         let mut theme_builder = match ThemeBuilder::get_entry(builder_config.as_ref().unwrap()) {
             Ok(t) => t,
@@ -166,20 +174,37 @@ impl Manager {
             }
         }
 
-        let mut tasks: Vec<Task<app::Message>> = Vec::new();
-        let customizers = match stage {
-            ThemeStaged::Current => vec![self.selected_customizer_mut()],
-            ThemeStaged::Both => vec![self.light.borrow_mut(), self.dark.borrow_mut()],
+        let map_data_fn = |customizer: &ThemeCustomizer| {
+            (customizer.builder.0.clone(), customizer.theme.1.clone())
         };
 
-        customizers.into_iter().for_each(|customizer| {
-            let builder = customizer.builder.0.clone();
-            let (current_theme, config) = customizer.theme.clone();
+        let current = map_data_fn(if self.mode.0.is_dark {
+            &self.dark
+        } else {
+            &self.light
+        });
 
-            tasks.push(cosmic::task::future(async move {
+        let other = if let ThemeStaged::Both = stage {
+            Some(map_data_fn(if !self.mode.0.is_dark {
+                &self.dark
+            } else {
+                &self.light
+            }))
+        } else {
+            None
+        };
+
+        let mut data = std::iter::once(current).chain(other.into_iter());
+
+        cosmic::task::future(async move {
+            while let Some((builder, config)) = data.next() {
                 if let Some(config) = config {
-                    let new_theme = builder.build();
+                    let current_theme = match Theme::get_entry(&config) {
+                        Ok(theme) => theme,
+                        Err((_errs, theme)) => theme,
+                    };
 
+                    let new_theme = builder.build();
                     theme_transaction!(config, current_theme, new_theme, {
                         accent;
                         accent_button;
@@ -198,16 +223,13 @@ impl Manager {
                         warning;
                         warning_button;
                         window_hint;
+                        accent_text;
                     });
-
-                    app::Message::from(super::Message::NewTheme(Box::new(new_theme)))
-                } else {
-                    app::Message::None
                 }
-            }));
-        });
+            }
 
-        cosmic::task::batch(tasks)
+            app::Message::SetTheme(cosmic::theme::system_preference())
+        })
     }
 
     #[inline]

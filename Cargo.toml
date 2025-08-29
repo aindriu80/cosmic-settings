@@ -4,14 +4,14 @@ default-members = ["cosmic-settings"]
 resolver = "2"
 
 [workspace.package]
-rust-version = "1.80.0"
+rust-version = "1.85.0"
 
 [workspace.dependencies]
 cosmic-randr = { git = "https://github.com/pop-os/cosmic-randr" }
-tokio = { version = "1.43.0", features = ["macros"] }
+tokio = { version = "1.47.0", features = ["macros"] }
 
 [workspace.dependencies.libcosmic]
-features = ["multi-window", "winit", "tokio"]
+features = ["dbus-config", "multi-window", "winit", "tokio"]
 git = "https://github.com/pop-os/libcosmic"
 
 [workspace.dependencies.cosmic-config]
@@ -22,6 +22,7 @@ git = "https://github.com/pop-os/cosmic-bg"
 
 [workspace.dependencies.cosmic-comp-config]
 git = "https://github.com/pop-os/cosmic-comp"
+features = ["output"]
 
 [workspace.dependencies.cosmic-idle-config]
 git = "https://github.com/pop-os/cosmic-idle"
@@ -32,22 +33,30 @@ git = "https://github.com/pop-os/cosmic-panel"
 [workspace.dependencies.cosmic-randr-shell]
 git = "https://github.com/pop-os/cosmic-randr"
 
+[workspace.dependencies.cosmic-settings-subscriptions]
+git = "https://github.com/pop-os/cosmic-settings-subscriptions"
+
 [workspace.dependencies.sctk]
 git = "https://github.com/smithay/client-toolkit/"
 package = "smithay-client-toolkit"
 # rev = "c583de8"
 
-[profile.release-with-debug]
-inherits = "release"
-debug = true
-
-[profile.release]
+[profile.dev]
 opt-level = "s"
 lto = "off"
 
+[profile.release]
+opt-level = "s"
+lto = "thin"
+
+[profile.release-with-debug]
+inherits = "release"
+lto = "off"
+debug = true
+
 # Fix text rendering being cut off on the right
-[patch.'https://github.com/pop-os/cosmic-text']
-cosmic-text = { git = "https://github.com/pop-os/cosmic-text//", rev = "b017d7c" }
+# [patch.'https://github.com/pop-os/cosmic-text']
+# cosmic-text = { git = "https://github.com/pop-os/cosmic-text//", rev = "b017d7c" }
 
 # [patch.'https://github.com/smithay/client-toolkit/']
 # smithay-client-toolkit = { git = "https://github.com/smithay/client-toolkit//", rev = "c583de8" }
@@ -61,9 +70,10 @@ cosmic-client-toolkit = { git = "https://github.com/pop-os/cosmic-protocols//", 
 
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
-# libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "drop-menu-tree-changes" }
-# cosmic-config = { git = "https://github.com/pop-os/libcosmic//", branch = "drop-menu-tree-changes" }
-# cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", branch = "drop-menu-tree-changes" }
+# libcosmic = { git = "https://github.com/pop-os/libcosmic//", rev = "8c4cb2e" }
+# cosmic-config = { git = "https://github.com/pop-os/libcosmic//", rev = "8c4cb2e" }
+# cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", rev = "8c4cb2e" }
+# iced_futures = { git = "https://github.com/pop-os/libcosmic//", rev = "8c4cb2e" }
 # libcosmic = { path = "../libcosmic" }
 # cosmic-config = { path = "../libcosmic/cosmic-config" }
 # cosmic-theme = { path = "../libcosmic/cosmic-theme" }

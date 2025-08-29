@@ -115,7 +115,6 @@ impl Page {
     }
 
     fn hostname_submit(&mut self) -> cosmic::app::Task<crate::app::Message> {
-        eprintln!("hostname submit");
         if self.hostname_input == self.info.device_name {
             return Task::none();
         }

@@ -644,6 +644,7 @@ nav-shortcuts = Navegação
 manage-windows = Gerenciamento de Janelas
     .close = Fechar janela
     .maximize = Maximizar janela
+    .fullscreen = Janela em tela cheia
     .minimize = Minimizar janela
     .resize-inwards = Redimensionar janela para dentro
     .resize-outwards = Redimensionar janela para fora
@@ -852,7 +853,7 @@ legacy-app-scaling = Dimensionamento de Aplicativos X11
     .scaled-compatibility = Modo de máxima compatibilidade
     .compatibility-description = Os aplicativos X11 podem aparecer desfocados em telas HiDPI.
     .preferred-display = Preferência para jogos e aplicativos X11 em tela cheia
-    .no-display = <Nenhum>
+    .no-display = Nenhum
 
 ## System
 

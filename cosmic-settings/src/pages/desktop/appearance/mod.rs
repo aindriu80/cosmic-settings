@@ -15,9 +15,7 @@ use cosmic::app::ContextDrawer;
 use cosmic::config::CosmicTk;
 use cosmic::cosmic_config::{Config, ConfigSet, CosmicConfigEntry};
 use cosmic::cosmic_theme::palette::{FromColor, Hsv, Srgb};
-use cosmic::cosmic_theme::{
-    CornerRadii, DARK_THEME_BUILDER_ID, Density, LIGHT_THEME_BUILDER_ID, Theme, ThemeBuilder,
-};
+use cosmic::cosmic_theme::{CornerRadii, Density, ThemeBuilder};
 #[cfg(feature = "xdg-portal")]
 use cosmic::dialog::file_chooser::{self, FileFilter};
 use cosmic::iced_core::{Alignment, Length};
@@ -144,7 +142,6 @@ pub enum Message {
     #[cfg(feature = "xdg-portal")]
     ImportSuccess(Box<ThemeBuilder>),
     Left,
-    NewTheme(Box<Theme>),
     PaletteAccent(cosmic::iced::Color),
     Reset,
     Roundness(Roundness),
@@ -226,24 +223,6 @@ impl Page {
         let mut theme_staged: Option<theme_manager::ThemeStaged> = None;
 
         match message {
-            Message::NewTheme(theme) => {
-                _ = self.theme_manager.dark_mode(theme.is_dark);
-
-                self.theme_manager
-                    .selected_customizer_mut()
-                    .set_theme(*theme);
-
-                self.can_reset = if self.theme_manager.mode().is_dark {
-                    *self.theme_manager.builder() != ThemeBuilder::dark()
-                } else {
-                    *self.theme_manager.builder() != ThemeBuilder::light()
-                };
-
-                return cosmic::task::message(app::Message::SetTheme(
-                    self.theme_manager.cosmic_theme(),
-                ));
-            }
-
             Message::Autoswitch(enabled) => self.theme_manager.auto_switch(enabled),
 
             Message::DarkMode(enabled) => {
@@ -252,10 +231,6 @@ impl Page {
                 }
 
                 self.drawer.reset(&self.theme_manager);
-                tasks.push(cosmic::task::message(app::Message::SetTheme(
-                    self.theme_manager.cosmic_theme(),
-                )));
-
                 theme_staged = Some(theme_manager::ThemeStaged::Current);
             }
 
@@ -273,10 +248,11 @@ impl Page {
 
             Message::DrawerColor(u) => {
                 if let Some(context_view) = self.context_view.as_ref() {
-                    tasks.push(self.drawer.update_color(u, context_view));
-                    theme_staged = self
-                        .theme_manager
-                        .set_color(self.drawer.current_color(context_view), context_view);
+                    if self.drawer.update_color(&mut tasks, u, context_view) {
+                        theme_staged = self
+                            .theme_manager
+                            .set_color(self.drawer.current_color(context_view), context_view);
+                    }
                 }
             }
 
@@ -306,21 +282,13 @@ impl Page {
             }
 
             Message::Density(density) => {
-                tracing::info!("Density changed: {:?}", density);
                 self.density = density;
+                theme_staged = self.theme_manager.set_spacing(density.into());
 
                 if let Some(config) = self.tk_config.as_mut() {
                     _ = config.set("interface_density", density);
                     _ = config.set("header_size", density);
                 }
-
-                let spacing = density.into();
-
-                self.theme_manager.set_spacing(spacing);
-
-                tasks.push(cosmic::task::message(app::Message::SetTheme(
-                    self.theme_manager.cosmic_theme(),
-                )));
 
                 #[cfg(feature = "wayland")]
                 tokio::task::spawn(async move {
@@ -328,11 +296,7 @@ impl Page {
                 });
             }
 
-            Message::Left => {
-                tasks.push(cosmic::task::message(app::Message::SetTheme(
-                    cosmic::theme::system_preference(),
-                )));
-            }
+            Message::Left => {}
 
             Message::PaletteAccent(c) => {
                 theme_staged = self
@@ -364,11 +328,15 @@ impl Page {
                 let r = self.roundness;
                 self.drawer.reset(&self.theme_manager);
 
-                #[cfg(feature = "wayland")]
-                tokio::task::spawn(async move {
-                    Self::update_panel_radii(r);
-                    Self::update_panel_spacing(Density::Standard);
-                });
+                tasks.push(cosmic::task::future(async move {
+                    #[cfg(feature = "wayland")]
+                    {
+                        Self::update_panel_radii(r);
+                        Self::update_panel_spacing(Density::Standard);
+                    }
+
+                    app::Message::SetTheme(cosmic::theme::system_preference())
+                }));
             }
 
             #[cfg(feature = "xdg-portal")]
@@ -380,12 +348,15 @@ impl Page {
                         .open_file()
                         .await;
 
-                    if let Ok(f) = res {
-                        Message::ImportFile(OpenResponse(Arc::new(f)))
-                    } else {
-                        // TODO Error toast?
-                        tracing::error!("failed to select a file for importing a custom theme.");
-                        Message::ImportError
+                    match res {
+                        Ok(f) => Message::ImportFile(OpenResponse(Arc::new(f))),
+                        Err(why) => {
+                            tracing::error!(
+                                ?why,
+                                "failed to select a file for importing a custom theme."
+                            );
+                            Message::ImportError
+                        }
                     }
                 }));
             }
@@ -410,6 +381,8 @@ impl Page {
                         Message::ExportError
                     }
                 }));
+
+                return cosmic::Task::batch(tasks);
             }
 
             #[cfg(feature = "xdg-portal")]
@@ -471,6 +444,8 @@ impl Page {
                     }
                     .into()
                 }));
+
+                return cosmic::Task::batch(tasks);
             }
 
             // TODO: error message toast?
@@ -480,11 +455,18 @@ impl Page {
             #[cfg(feature = "xdg-portal")]
             Message::ExportSuccess => {
                 tracing::trace!("Export successful");
+                return Task::none();
             }
 
             #[cfg(feature = "xdg-portal")]
             Message::ImportSuccess(builder) => {
                 tracing::trace!("Import successful");
+                let new_is_dark = builder.palette.is_dark();
+                if new_is_dark != self.theme_manager.mode().is_dark {
+                    if let Err(err) = self.theme_manager.dark_mode(new_is_dark) {
+                        tracing::error!(?err, "Error setting dark mode");
+                    }
+                }
 
                 self.theme_manager
                     .selected_customizer_mut()
@@ -494,13 +476,14 @@ impl Page {
                     .apply_theme();
 
                 self.drawer.reset(&self.theme_manager);
-                tasks.push(cosmic::task::message(app::Message::SetTheme(
-                    self.theme_manager.cosmic_theme(),
-                )));
+
+                return cosmic::task::future(async move {
+                    app::Message::SetTheme(cosmic::theme::system_preference())
+                });
             }
 
             Message::UseDefaultWindowHint(v) => {
-                if !v {
+                if v {
                     let _ = self
                         .theme_manager
                         .selected_customizer_mut()
@@ -541,8 +524,14 @@ impl Page {
         let mut tasks = cosmic::Task::batch(tasks);
 
         if let Some(stage) = theme_staged {
-            tasks = tasks.chain(self.theme_manager.build_theme(stage));
+            tasks = tasks.chain(self.theme_manager.build_theme(stage))
         }
+
+        self.can_reset = if self.theme_manager.mode().is_dark {
+            *self.theme_manager.builder() != ThemeBuilder::dark()
+        } else {
+            *self.theme_manager.builder() != ThemeBuilder::light()
+        };
 
         tasks
     }

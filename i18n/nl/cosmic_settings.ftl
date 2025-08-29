@@ -208,6 +208,9 @@ x-minutes = { $number } { $number ->
         *[other] minuten
     }
 x-hours = { $number } uur
+<#-- these three lines are intentionally left empty -->
+
+
 never = Nooit
 
 ## Desktop: Appearance
@@ -488,8 +491,9 @@ battery = Batterij
     .minute = { $value } { $value ->
         [one] minuut
         *[other] minuten
-    }   
+    }
     .hour = { $value } uur
+<#-- these three lines are intentionally left empty -->
 
 
     .day = { $value } { $value ->
@@ -498,7 +502,7 @@ battery = Batterij
     }
     .less-than-minute = In minder dan één minuut
     .and = en
-    .remaining-time = De batterij is over { $time } { $action -> 
+    .remaining-time = De batterij is over { $time } { $action ->
         [full] opgeladen
         *[other] leeg
     }
@@ -640,6 +644,7 @@ nav-shortcuts = Navigatie
 manage-windows = Vensterbeheer
     .close = Venster sluiten
     .maximize = Venster maximaliseren
+    .fullscreen = Volledig scherm
     .minimize = Venster minimaliseren
     .resize-inwards = Venster verkleinen
     .resize-outwards = Venster vergroten
@@ -688,6 +693,7 @@ system-shortcut = Systeem
     .play-pause = Afspelen/Pauzeren
     .play-next = Volgend nummer
     .play-prev = Vorig nummer
+    .poweroff = Computer afsluiten
     .screenshot = Schermafbeelding maken
     .terminal = Open een terminal
     .volume-lower = Uitvoervolume lager
@@ -812,8 +818,8 @@ default-apps = Standaardtoepassingen
     .photos = Foto's
     .calendar = Agenda
     .terminal = Terminal
-    .other-associations = Andere koppelingen
-    .text-editor = Teksteditor
+    .other-associations = Andere standaardtoepassingen
+    .text-editor = Tekstbewerking
 
 ## Applications: Startup Applications
 
@@ -847,7 +853,7 @@ legacy-app-scaling = Het schalen van vensters die het X11-venstersysteem gebruik
     .scaled-compatibility = Modus voor maximale compatibiliteit
     .compatibility-description = X11-vensters kunnen wazig lijken op HiDPI-schermen.
     .preferred-display = Uw voorkeursscherm voor games en X11-vensters in volledig scherm
-    .no-display = <Geen>
+    .no-display = Geen
 
 ## System
 

@@ -404,7 +404,7 @@ color = Color
     .temperature = Color temperature
 
 display = Displays
-    .desc = Manage displays, graphics switching, and night light
+    .desc = Manage displays and night light
     .arrangement = Display Arrangement
     .arrangement-desc = Drag displays to rearrange them.
     .enable = Enable display
@@ -784,7 +784,7 @@ time-format = Date & Time Format
     .monday = Monday
 
 time-region = Region & Language
-    .desc = Format dates, times, and numbers based on your region
+    .desc = Format dates, times, and numbers based on your region.
 
 formatting = Formatting
     .dates = Dates
@@ -795,7 +795,7 @@ formatting = Formatting
     .paper = Paper
 
 preferred-languages = Preferred Languages
-    .desc = The order of languages determines which language is used for the translation of the desktop. Changes take effect on next login.
+    .desc = The order of languages determines which language is used for the user interface. Changes take effect on next login.
 
 add-language = Add language
     .context = Add Language
@@ -826,10 +826,10 @@ default-apps = Default Applications
 startup-apps = Startup Applications
     .desc = Configure applications which run on login.
     .add = Add app
-    .user = User specific applications
-    .user-description = These applications are launched when you log into your current user.
+    .user = Applications launched when you log in
+    .none = No startup applications added
     .remove-dialog-title = Remove { $name }?
-    .remove-dialog-description = Are you sure you want to remove this as a startup application?
+    .remove-dialog-description = Are you sure you want to remove this startup application?
     .search-for-application = Search for application
 
 ## Applications: Legacy Applications
@@ -853,7 +853,7 @@ legacy-app-scaling = X11 Window System Application Scaling
     .scaled-compatibility = Maximum compatibility mode
     .compatibility-description = X11 applications may appear blurry on HiDPI screens.
     .preferred-display = Preferred display for games and full screen X11 applications
-    .no-display = <None>
+    .no-display = None
 
 ## System
 

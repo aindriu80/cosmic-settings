@@ -1,133 +1,69 @@
 // Copyright 2023 System76 <info@system76.com>
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{collections::BTreeMap, time::Duration};
-
 use cosmic::{
-    Element, Task,
+    Apply, Element, Task,
     iced::{Alignment, Length, window},
     surface,
     widget::{self, settings},
 };
 use cosmic_settings_page::{self as page, Section, section};
-use cosmic_settings_subscriptions::{pipewire, pulse};
-use futures::StreamExt;
-use indexmap::IndexMap;
 use slab::Slab;
 use slotmap::SlotMap;
 
-pub type NodeId = u32;
-pub type ProfileId = u32;
+use cosmic_settings_subscriptions::sound as subscription;
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    /// Get default sinks/sources and their volumes/mute status.
-    Pulse(pulse::Event),
-    /// Get ALSA cards and their profiles.
-    Pipewire(pipewire::DeviceEvent),
+    /// Change the balance of the active sink.
+    SinkBalanceChanged(u32),
     /// Change the default output.
     SinkChanged(usize),
-    /// Change the active profile for an output.
-    SinkProfileChanged(usize),
-    /// Select a device from the given card after a profile change.
-    SinkProfileSelect(DeviceId),
-    /// Request to change the default output volume.
-    SinkVolumeChanged(u32),
-    /// Request to change the default output balance.
-    SinkBalanceChanged(u32),
-    /// Change the output volume.
-    SinkVolumeApply(NodeId),
-    /// Change the output balance.
-    SinkBalanceApply,
     /// Toggle the mute status of the output.
     SinkMuteToggle,
+    /// Change the active profile for an output.
+    SinkProfileChanged(usize),
+    /// Request to change the default output volume.
+    SinkVolumeChanged(u32),
     /// Change the default input output.
     SourceChanged(usize),
-    /// Change the active profile for an output.
-    SourceProfileChanged(usize),
-    /// Select a device from the given card after a profile change.
-    SourceProfileSelect(DeviceId),
-    /// Request to change the input volume.
-    SourceVolumeChanged(u32),
-    /// Change the input volume.
-    SourceVolumeApply(NodeId),
     /// Toggle the mute status of the input output.
     SourceMuteToggle,
+    /// Change the active profile for an output.
+    SourceProfileChanged(usize),
+    /// Request to change the input volume.
+    SourceVolumeChanged(u32),
+    /// Messages handled by the sound module in cosmic-settings-subscriptions
+    Subscription(subscription::Message),
     /// Surface Action
     Surface(surface::Action),
 }
 
-#[derive(Debug)]
-struct Card {
-    devices: IndexMap<NodeId, Device>,
+impl From<Message> for crate::pages::Message {
+    fn from(message: Message) -> Self {
+        crate::pages::Message::Sound(message)
+    }
 }
 
-#[derive(Debug)]
-struct Device {
-    class: pipewire::MediaClass,
-    identifier: String,
-    description: String,
+impl From<Message> for crate::Message {
+    fn from(message: Message) -> Self {
+        crate::Message::PageMessage(message.into())
+    }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub enum DeviceId {
-    Alsa(u32),
-    Bluez5(String),
-    Unknown(),
+impl Into<Message> for subscription::Message {
+    fn into(self) -> Message {
+        Message::Subscription(self)
+    }
 }
 
 #[derive(Default)]
 pub struct Page {
     entity: page::Entity,
-    pipewire_thread: Option<(tokio::sync::oneshot::Sender<()>, pipewire::Sender<()>)>,
-    pulse_thread: Option<tokio::sync::oneshot::Sender<()>>,
-    devices: BTreeMap<DeviceId, Card>,
-    card_names: IndexMap<DeviceId, String>,
-    card_profiles: IndexMap<DeviceId, Vec<pulse::CardProfile>>,
-    active_profiles: IndexMap<DeviceId, Option<String>>,
-
-    default_sink: String,
-    default_source: String,
-
-    sink_volume: u32,
-    sink_volume_text: String,
-    sink_mute: bool,
-    sink_volume_debounce: bool,
-
-    sink_balance: Option<f32>,
-    sink_balance_text: Option<String>,
-    sink_balance_debounce: bool,
-    sink_channels: Option<pulse::PulseChannels>,
-    source_volume: u32,
-    source_volume_text: String,
-    source_mute: bool,
-    source_volume_debounce: bool,
-
-    sinks: Vec<String>,
-    sink_ids: Vec<NodeId>,
-    sink_profiles: Vec<String>,
-    sink_profile_names: Vec<String>,
-    sources: Vec<String>,
-    source_ids: Vec<NodeId>,
-    source_profiles: Vec<String>,
-    source_profile_names: Vec<String>,
-
-    active_sink: Option<usize>,
-    active_sink_device: Option<DeviceId>,
-    active_sink_profile: Option<usize>,
-    active_source: Option<usize>,
-    active_source_device: Option<DeviceId>,
-    active_source_profile: Option<usize>,
-
-    changing_sink_profile: bool,
-    changing_source_profile: bool,
+    model: subscription::Model,
 }
 
 impl page::Page<crate::pages::Message> for Page {
-    fn set_id(&mut self, entity: page::Entity) {
-        self.entity = entity;
-    }
-
     fn content(
         &self,
         sections: &mut SlotMap<section::Entity, Section<crate::pages::Message>>,
@@ -141,74 +77,21 @@ impl page::Page<crate::pages::Message> for Page {
             .description(fl!("sound", "desc"))
     }
 
-    fn on_enter(&mut self) -> Task<crate::pages::Message> {
-        let mut tasks = Vec::with_capacity(2);
-        if self.pulse_thread.is_none() {
-            let (tx, mut rx) = futures::channel::mpsc::channel(1);
-            let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
-
-            // Listen to events from the pulse thread until the tx channel is closed.
-            _ = std::thread::spawn(move || {
-                pulse::thread(tx);
-            });
-
-            // Forward events from the pulse thread to the application until
-            // the application requests to stop listening to the pulse thread.
-            tasks.push(Task::stream(async_fn_stream::fn_stream(
-                |emitter| async move {
-                    let forwarder = std::pin::pin!(async move {
-                        while let Some(event) = rx.next().await {
-                            let event = crate::pages::Message::Sound(Message::Pulse(event));
-                            emitter.emit(event).await;
-                        }
-                    });
-
-                    futures::future::select(std::pin::pin!(cancel_rx), forwarder).await;
-                },
-            )));
-
-            self.pulse_thread = Some(cancel_tx);
-        }
-
-        if self.pipewire_thread.is_none() {
-            let (tx, mut rx) = futures::channel::mpsc::channel(1);
-            let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
-
-            // Listen to events from the pipewire thread until the tx channel is closed.
-            let (_handle, terminate) = pipewire::thread(tx);
-
-            // Forward events from the pipewire thread to the application until
-            // the application requests to stop listening to the pulse thread.
-            tasks.push(Task::stream(async_fn_stream::fn_stream(
-                |emitter| async move {
-                    let forwarder = std::pin::pin!(async move {
-                        while let Some(event) = rx.next().await {
-                            let event = crate::pages::Message::Sound(Message::Pipewire(event));
-                            emitter.emit(event).await;
-                        }
-                    });
-
-                    futures::future::select(std::pin::pin!(cancel_rx), forwarder).await;
-                },
-            )));
-
-            self.pipewire_thread = Some((cancel_tx, terminate));
-        }
-
-        cosmic::task::batch(tasks)
+    fn subscription(
+        &self,
+        _core: &cosmic::Core,
+    ) -> cosmic::iced::Subscription<crate::pages::Message> {
+        cosmic::iced::Subscription::run(|| subscription::watch())
+            .map(|message| Message::Subscription(message).into())
     }
 
     fn on_leave(&mut self) -> Task<crate::pages::Message> {
-        if let Some(cancellation) = self.pulse_thread.take() {
-            _ = cancellation.send(());
-        }
+        self.model.clear();
 
-        if let Some((cancellation, terminate)) = self.pipewire_thread.take() {
-            _ = cancellation.send(());
-            _ = terminate.send(());
-        }
-
-        *self = Page::default();
+        *self = Page {
+            entity: self.entity,
+            ..Page::default()
+        };
 
         Task::none()
     }
@@ -217,415 +100,70 @@ impl page::Page<crate::pages::Message> for Page {
 impl page::AutoBind<crate::pages::Message> for Page {}
 
 impl Page {
-    fn device_profiles(&self, device_id: &DeviceId) -> (Vec<String>, Vec<String>, Option<usize>) {
-        let (profiles, profile_descriptions): (Vec<String>, Vec<String>) = self
-            .card_profiles
-            .get(device_id)
-            .map_or((Vec::new(), Vec::new()), |profiles| {
-                profiles
-                    .iter()
-                    // TODO: Allow disabling
-                    .filter(|p| p.available && p.description != "Off")
-                    .map(|p| (p.name.clone(), p.description.clone()))
-                    .collect()
-            });
-
-        let active_profile = self.active_profiles.get(device_id).and_then(|profile| {
-            profile
-                .as_ref()
-                .and_then(|profile| profiles.iter().position(|p| p == profile))
-        });
-
-        (profiles, profile_descriptions, active_profile)
-    }
-
-    fn set_sink_profiles(&mut self, device_id: &DeviceId) {
-        (
-            self.sink_profile_names,
-            self.sink_profiles,
-            self.active_sink_profile,
-        ) = self.device_profiles(device_id);
-    }
-
-    fn set_source_profiles(&mut self, device_id: &DeviceId) {
-        (
-            self.source_profile_names,
-            self.source_profiles,
-            self.active_source_profile,
-        ) = self.device_profiles(device_id);
-    }
-
-    fn set_default_sink(&mut self, sink: String) {
-        if self.default_sink == sink {
-            return;
-        }
-
-        self.default_sink = sink;
-        self.active_sink_profile = None;
-        self.sink_profiles.clear();
-        self.sink_profile_names.clear();
-
-        for (device_id, card) in &self.devices {
-            for (&node_id, device) in &card.devices {
-                if let pipewire::MediaClass::Sink = device.class {
-                    if device.identifier == self.default_sink {
-                        self.active_sink = self.sink_ids.iter().position(|&id| id == node_id);
-                        let device_id = device_id.clone();
-                        self.set_sink_profiles(&device_id);
-                        self.active_sink_device = Some(device_id);
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
-    fn set_default_source(&mut self, source: String) {
-        if self.default_source == source {
-            return;
-        }
-
-        self.default_source = source;
-        self.active_source_profile = None;
-        self.source_profiles.clear();
-        self.source_profile_names.clear();
-
-        for (device_id, card) in &self.devices {
-            for (&node_id, device) in &card.devices {
-                if let pipewire::MediaClass::Source = device.class {
-                    if device.identifier == self.default_source {
-                        self.active_source = self.source_ids.iter().position(|&id| id == node_id);
-                        let device_id = device_id.clone();
-                        self.set_source_profiles(&device_id);
-                        self.active_source_device = Some(device_id);
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
     pub fn update(&mut self, message: Message) -> Task<crate::app::Message> {
         match message {
-            Message::SourceVolumeChanged(volume) => {
-                self.source_volume = volume;
-                self.source_volume_text = volume.to_string();
-                if self.source_volume_debounce {
-                    return Task::none();
-                }
-
-                let mut command = None;
-                if let Some(&node_id) = self.source_ids.get(self.active_source.unwrap_or(0)) {
-                    command = Some(cosmic::task::future(async move {
-                        tokio::time::sleep(Duration::from_millis(64)).await;
-                        crate::pages::Message::Sound(Message::SourceVolumeApply(node_id))
-                    }));
-                }
-
-                if let Some(command) = command {
-                    self.source_volume_debounce = true;
-                    return command;
-                }
-            }
-            Message::Pulse(pulse::Event::SourceVolume(volume)) => {
-                if self.sink_volume_debounce {
-                    return Task::none();
-                }
-
-                self.source_volume = volume;
-                self.source_volume_text = volume.to_string();
-            }
-            Message::SinkVolumeChanged(volume) => {
-                self.sink_volume = volume;
-                self.sink_volume_text = volume.to_string();
-                if self.sink_volume_debounce {
-                    return Task::none();
-                }
-
-                let mut command = None;
-                if let Some(&node_id) = self.sink_ids.get(self.active_sink.unwrap_or(0)) {
-                    command = Some(cosmic::task::future(async move {
-                        tokio::time::sleep(Duration::from_millis(64)).await;
-                        crate::pages::Message::Sound(Message::SinkVolumeApply(node_id))
-                    }));
-                }
-
-                if let Some(command) = command {
-                    self.sink_volume_debounce = true;
-                    return command;
-                }
-            }
             Message::SinkBalanceChanged(balance) => {
-                self.sink_balance = Some((balance as f32 - 100.) / 100.);
-                self.sink_balance_text = Some(format!("{balance:.2}"));
-                if self.sink_balance_debounce {
-                    return Task::none();
-                }
-
-                let mut command = None;
-                if !self.sink_ids.get(self.active_sink.unwrap_or(0)).is_none() {
-                    command = Some(cosmic::task::future(async move {
-                        tokio::time::sleep(Duration::from_millis(64)).await;
-                        crate::pages::Message::Sound(Message::SinkBalanceApply)
-                    }));
-                }
-
-                if let Some(command) = command {
-                    self.sink_balance_debounce = true;
-                    return command;
-                }
-            }
-            Message::Pulse(pulse::Event::SinkVolume(volume)) => {
-                if self.sink_volume_debounce {
-                    return Task::none();
-                }
-
-                self.sink_volume = volume;
-                self.sink_volume_text = volume.to_string();
-            }
-            Message::Pulse(pulse::Event::DefaultSink(sink)) => {
-                if !self.changing_sink_profile {
-                    self.set_default_sink(sink);
-                }
-            }
-            Message::Pulse(pulse::Event::DefaultSource(source)) => {
-                if !self.changing_source_profile {
-                    self.set_default_source(source);
-                }
-            }
-            Message::Pulse(pulse::Event::SinkMute(mute)) => {
-                self.sink_mute = mute;
-            }
-            Message::Pulse(pulse::Event::SourceMute(mute)) => {
-                self.source_mute = mute;
-            }
-            Message::Pulse(pulse::Event::CardInfo(card)) => {
-                let device_id = match card.variant {
-                    pulse::DeviceVariant::Alsa { alsa_card, .. } => DeviceId::Alsa(alsa_card),
-                    pulse::DeviceVariant::Bluez5 { address, .. } => DeviceId::Bluez5(address),
-                };
-
-                self.card_names.insert(device_id.clone(), card.name);
-                self.card_profiles.insert(device_id.clone(), card.profiles);
-                self.active_profiles
-                    .insert(device_id, card.active_profile.map(|p| p.name));
-            }
-            Message::Pulse(pulse::Event::Balance(balance)) => {
-                self.sink_balance = balance;
-                self.sink_balance_text = balance.map(|b| format!("{b:.2}"));
-            }
-            Message::Pulse(pulse::Event::Channels(channels)) => {
-                self.sink_channels = Some(channels);
-            }
-            Message::Pipewire(pipewire::DeviceEvent::Add(device)) => {
-                let device_id = match device.variant {
-                    pipewire::DeviceVariant::Alsa { alsa_card, .. } => DeviceId::Alsa(alsa_card),
-                    pipewire::DeviceVariant::Bluez5 { address, .. } => DeviceId::Bluez5(address),
-                    pipewire::DeviceVariant::Unknown {} => DeviceId::Unknown {},
-                };
-
-                match device.media_class {
-                    pipewire::MediaClass::Sink => {
-                        self.sinks.push(device.node_description.clone());
-                        self.sink_ids.push(device.object_id);
-                        sort_pulse_devices(&mut self.sinks, &mut self.sink_ids);
-                        if self.default_sink == device.node_name {
-                            self.active_sink = self
-                                .sinks
-                                .iter()
-                                .position(|s| *s == device.node_description);
-                            self.active_sink_device = Some(device_id.clone());
-                            self.set_sink_profiles(&device_id);
-                        }
-                    }
-
-                    pipewire::MediaClass::Source => {
-                        self.sources.push(device.node_description.clone());
-                        self.source_ids.push(device.object_id);
-                        sort_pulse_devices(&mut self.sources, &mut self.source_ids);
-                        if self.default_source == device.node_name {
-                            self.active_source = self
-                                .sources
-                                .iter()
-                                .position(|s| *s == device.node_description);
-                            self.active_source_device = Some(device_id.clone());
-                            self.set_source_profiles(&device_id);
-                        }
-                    }
-                }
-
-                let card = self.devices.entry(device_id).or_insert_with(|| Card {
-                    devices: IndexMap::new(),
-                });
-
-                card.devices.insert(
-                    device.object_id,
-                    Device {
-                        class: device.media_class,
-                        identifier: device.node_name,
-                        description: device.node_description,
-                    },
-                );
-
-                card.devices
-                    .sort_unstable_by(|_, av, _, bv| av.description.cmp(&bv.description));
-            }
-            Message::Pipewire(pipewire::DeviceEvent::Remove(node_id)) => {
-                let mut remove = None;
-                for (card_id, card) in &mut self.devices {
-                    if card.devices.shift_remove(&node_id).is_some() {
-                        if card.devices.is_empty() {
-                            remove = Some(card_id.clone());
-                        }
-                        break;
-                    }
-                }
-
-                if let Some(card_id) = remove {
-                    _ = self.devices.remove(&card_id);
-                }
-
-                if let Some(pos) = self.sink_ids.iter().position(|&id| id == node_id) {
-                    _ = self.sink_ids.remove(pos);
-                    _ = self.sinks.remove(pos);
-                    if self.active_sink == Some(pos) {
-                        self.active_sink = None;
-                        self.active_sink_device = None;
-                        self.active_sink_profile = None;
-                    }
-                } else if let Some(pos) = self.source_ids.iter().position(|&id| id == node_id) {
-                    _ = self.source_ids.remove(pos);
-                    _ = self.sources.remove(pos);
-                    if self.active_source == Some(pos) {
-                        self.active_source = None;
-                        self.active_source_device = None;
-                        self.active_source_profile = None;
-                    }
-                }
+                return self
+                    .model
+                    .sink_balance_changed(balance)
+                    .map(|message| Message::Subscription(message).into());
             }
             Message::SinkChanged(pos) => {
-                if let Some(node_id) = self.sink_ids.get(pos) {
-                    for card in self.devices.values() {
-                        for (nid, device) in &card.devices {
-                            if node_id == nid {
-                                self.active_sink = Some(pos);
-                                pactl_set_default_sink(device.identifier.clone());
-                                self.set_default_sink(device.identifier.clone());
-                                return Task::none();
-                            }
-                        }
-                    }
-                }
+                return self
+                    .model
+                    .sink_changed(pos)
+                    .map(|message| Message::Subscription(message).into());
             }
-            Message::SourceChanged(pos) => {
-                if let Some(node_id) = self.source_ids.get(pos) {
-                    for card in self.devices.values() {
-                        for (nid, device) in &card.devices {
-                            if node_id == nid {
-                                self.active_source = Some(pos);
-                                pactl_set_default_source(device.identifier.clone());
-                                self.set_default_source(device.identifier.clone());
-                                return Task::none();
-                            }
-                        }
-                    }
-                }
-            }
-            Message::SinkBalanceApply => {
-                self.sink_balance_debounce = false;
-                if let Some((balance, channels)) =
-                    self.sink_balance.zip(self.sink_channels.as_mut())
-                {
-                    channels.set_balance(balance);
-                }
-            }
-            Message::SinkVolumeApply(_) => {
-                self.sink_volume_debounce = false;
-                if let Some(channels) = self.sink_channels.as_mut() {
-                    channels.set_volume(self.sink_volume as f32 / 100.);
-                }
-            }
-            Message::SourceVolumeApply(node_id) => {
-                self.source_volume_debounce = false;
-                wpctl_set_volume(node_id, self.source_volume);
-            }
-            Message::SinkMuteToggle => {
-                self.sink_mute = !self.sink_mute;
-                if let Some(&node_id) = self.sink_ids.get(self.active_sink.unwrap_or(0)) {
-                    wpctl_set_mute(node_id, self.sink_mute);
-                }
-            }
-            Message::SourceMuteToggle => {
-                self.source_mute = !self.source_mute;
-                if let Some(&node_id) = self.source_ids.get(self.active_source.unwrap_or(0)) {
-                    wpctl_set_mute(node_id, self.source_mute);
-                }
-            }
+
+            Message::SinkMuteToggle => self.model.sink_mute_toggle(),
+
             Message::SinkProfileChanged(profile) => {
-                self.active_sink_profile = Some(profile);
-
-                if let Some(profile) = self.sink_profile_names.get(profile).cloned() {
-                    if let Some(device_id) = self.active_sink_device.clone() {
-                        if let Some(name) = self.card_names.get(&device_id).cloned() {
-                            self.active_profiles
-                                .insert(device_id.clone(), Some(profile.clone()));
-
-                            self.changing_sink_profile = true;
-                            return cosmic::task::future(async move {
-                                pactl_set_card_profile(name, profile).await;
-                                Message::SinkProfileSelect(device_id)
-                            })
-                            .map(crate::pages::Message::Sound)
-                            .map(crate::app::Message::PageMessage);
-                        }
-                    }
-                }
+                return self
+                    .model
+                    .sink_profile_changed(profile)
+                    .map(|message| Message::Subscription(message).into());
             }
-            Message::SinkProfileSelect(device_id) => {
-                self.changing_sink_profile = false;
-                let sink_pos = self.active_sink.unwrap_or(0);
 
-                if let Some(card) = self.devices.get(&device_id) {
-                    if let Some((_, device)) = card.devices.get_index(sink_pos) {
-                        pactl_set_default_sink(device.identifier.clone());
-                        self.set_default_sink(device.identifier.clone());
-                    }
-                }
+            Message::SinkVolumeChanged(volume) => {
+                return self
+                    .model
+                    .sink_volume_changed(volume)
+                    .map(|message| Message::Subscription(message).into());
             }
+
+            Message::SourceChanged(pos) => {
+                return self
+                    .model
+                    .source_changed(pos)
+                    .map(|message| Message::Subscription(message).into());
+            }
+
+            Message::SourceMuteToggle => self.model.source_mute_toggle(),
+
             Message::SourceProfileChanged(profile) => {
-                self.active_source_profile = Some(profile);
-                if let Some(profile) = self.source_profile_names.get(profile).cloned() {
-                    if let Some(device_id) = self.active_source_device.clone() {
-                        if let Some(name) = self.card_names.get(&device_id).cloned() {
-                            self.active_profiles
-                                .insert(device_id.clone(), Some(profile.clone()));
+                return self
+                    .model
+                    .source_profile_changed(profile)
+                    .map(|message| Message::Subscription(message).into());
+            }
 
-                            self.changing_source_profile = true;
-                            return cosmic::task::future(async move {
-                                pactl_set_card_profile(name, profile).await;
-                                Message::SourceProfileSelect(device_id)
-                            })
-                            .map(crate::pages::Message::Sound)
-                            .map(crate::app::Message::PageMessage);
-                        }
-                    }
-                }
+            Message::SourceVolumeChanged(volume) => {
+                return self
+                    .model
+                    .source_volume_changed(volume)
+                    .map(|message| Message::Subscription(message).into());
             }
-            Message::SourceProfileSelect(device_id) => {
-                self.changing_source_profile = false;
-                let source_pos = self.active_source.unwrap_or(0);
 
-                if let Some(card) = self.devices.get(&device_id) {
-                    if let Some((_, device)) = card.devices.get_index(source_pos) {
-                        pactl_set_default_source(device.identifier.clone());
-                        self.set_default_source(device.identifier.clone());
-                    }
-                }
+            Message::Subscription(message) => {
+                return self
+                    .model
+                    .update(message)
+                    .map(|message| Message::Subscription(message).into());
             }
-            Message::Surface(a) => {
-                return cosmic::task::message(crate::app::Message::Surface(a));
-            }
+
+            Message::Surface(a) => return cosmic::task::message(crate::app::Message::Surface(a)),
         }
+
         Task::none()
     }
 }
@@ -642,34 +180,42 @@ fn input() -> Section<crate::pages::Message> {
         .title(fl!("sound-input"))
         .descriptions(descriptions)
         .view::<Page>(move |_binder, page, section| {
+            if page.model.sources().is_empty() {
+                return widget::row().into();
+            }
+
             let volume_control = widget::row::with_capacity(4)
                 .align_y(Alignment::Center)
                 .push(
-                    widget::button::icon(widget::icon::from_name(if page.source_mute {
+                    widget::button::icon(widget::icon::from_name(if page.model.source_mute {
                         "microphone-sensitivity-muted-symbolic"
                     } else {
                         "audio-input-microphone-symbolic"
                     }))
-                    .on_press(Message::SourceMuteToggle),
+                    .on_press(Message::SourceMuteToggle.into()),
                 )
                 .push(
-                    widget::text::body(&page.source_volume_text)
+                    widget::text::body(&page.model.source_volume_text)
                         .width(Length::Fixed(22.0))
                         .align_x(Alignment::Center),
                 )
                 .push(widget::horizontal_space().width(8))
                 .push(
-                    widget::slider(0..=150, page.source_volume, Message::SourceVolumeChanged)
-                        .breakpoints(&[100]),
+                    widget::slider(0..=150, page.model.source_volume, |change| {
+                        Message::SourceVolumeChanged(change).into()
+                    })
+                    .breakpoints(&[100]),
                 );
             let devices = widget::dropdown::popup_dropdown(
-                &page.sources,
-                Some(page.active_source.unwrap_or(0)),
+                page.model.sources(),
+                Some(page.model.active_source().unwrap_or(0)),
                 Message::SourceChanged,
                 window::Id::RESERVED,
                 Message::Surface,
-                |a| crate::app::Message::PageMessage(crate::pages::Message::Sound(a)),
-            );
+                |a| crate::Message::from(a),
+            )
+            .apply(Element::from)
+            .map(crate::pages::Message::from);
 
             let mut controls = settings::section()
                 .title(&section.title)
@@ -679,20 +225,22 @@ fn input() -> Section<crate::pages::Message> {
                 ))
                 .add(settings::item(&*section.descriptions[device], devices));
 
-            if !page.source_profiles.is_empty() {
+            if !page.model.source_profiles().is_empty() {
                 let dropdown = widget::dropdown::popup_dropdown(
-                    &page.source_profiles,
-                    page.active_source_profile,
+                    page.model.source_profiles(),
+                    page.model.active_source_profile(),
                     Message::SourceProfileChanged,
                     window::Id::RESERVED,
                     Message::Surface,
-                    |a| crate::app::Message::PageMessage(crate::pages::Message::Sound(a)),
-                );
+                    |a| crate::Message::from(a),
+                )
+                .apply(Element::from)
+                .map(crate::pages::Message::from);
 
                 controls = controls.add(settings::item(&*section.descriptions[profile], dropdown));
             }
 
-            Element::from(controls).map(crate::pages::Message::Sound)
+            Element::from(controls)
         })
 }
 
@@ -715,32 +263,36 @@ fn output() -> Section<crate::pages::Message> {
             let volume_control = widget::row::with_capacity(4)
                 .align_y(Alignment::Center)
                 .push(
-                    widget::button::icon(if page.sink_mute {
+                    widget::button::icon(if page.model.sink_mute {
                         widget::icon::from_name("audio-volume-muted-symbolic")
                     } else {
                         widget::icon::from_name("audio-volume-high-symbolic")
                     })
-                    .on_press(Message::SinkMuteToggle),
+                    .on_press(Message::SinkMuteToggle.into()),
                 )
                 .push(
-                    widget::text::body(&page.sink_volume_text)
+                    widget::text::body(&page.model.sink_volume_text)
                         .width(Length::Fixed(22.0))
                         .align_x(Alignment::Center),
                 )
                 .push(widget::horizontal_space().width(8))
                 .push(
-                    widget::slider(0..=150, page.sink_volume, Message::SinkVolumeChanged)
-                        .breakpoints(&[100]),
+                    widget::slider(0..=150, page.model.sink_volume, |change| {
+                        Message::SinkVolumeChanged(change).into()
+                    })
+                    .breakpoints(&[100]),
                 );
 
             let devices = widget::dropdown::popup_dropdown(
-                &page.sinks,
-                Some(page.active_sink.unwrap_or(0)),
+                page.model.sinks(),
+                Some(page.model.active_sink().unwrap_or(0)),
                 Message::SinkChanged,
                 window::Id::RESERVED,
                 Message::Surface,
-                |a| crate::app::Message::PageMessage(crate::pages::Message::Sound(a)),
-            );
+                |a| crate::Message::from(a),
+            )
+            .apply(Element::from)
+            .map(crate::pages::Message::from);
 
             let mut controls = settings::section()
                 .title(&section.title)
@@ -750,19 +302,21 @@ fn output() -> Section<crate::pages::Message> {
                 ))
                 .add(settings::item(&*section.descriptions[device], devices));
 
-            if !page.sink_profiles.is_empty() {
+            if !page.model.sink_profiles().is_empty() {
                 let dropdown = widget::dropdown::popup_dropdown(
-                    &page.sink_profiles,
-                    page.active_sink_profile,
+                    page.model.sink_profiles(),
+                    page.model.active_sink_profile(),
                     Message::SinkProfileChanged,
                     window::Id::RESERVED,
                     Message::Surface,
-                    |a| crate::app::Message::PageMessage(crate::pages::Message::Sound(a)),
-                );
+                    |a| crate::Message::from(a),
+                )
+                .apply(Element::from)
+                .map(crate::pages::Message::from);
 
                 controls = controls.add(settings::item(&*section.descriptions[profile], dropdown));
             }
-            if let Some(sink_balance) = page.sink_balance {
+            if let Some(sink_balance) = page.model.sink_balance {
                 controls = controls.add(settings::item(
                     &*section.descriptions[balance],
                     widget::row::with_capacity(4)
@@ -777,7 +331,7 @@ fn output() -> Section<crate::pages::Message> {
                             widget::slider(
                                 0..=200,
                                 ((sink_balance + 1.).max(0.) * 100.).round() as u32,
-                                Message::SinkBalanceChanged,
+                                |change| Message::SinkBalanceChanged(change).into(),
                             )
                             .breakpoints(&[100]),
                         )
@@ -790,7 +344,7 @@ fn output() -> Section<crate::pages::Message> {
                 ));
             }
 
-            Element::from(controls).map(crate::pages::Message::Sound)
+            Element::from(controls)
         })
 }
 
@@ -827,60 +381,3 @@ fn output() -> Section<crate::pages::Message> {
 //                 .into()
 //         })
 // }
-
-fn sort_pulse_devices(descriptions: &mut Vec<String>, node_ids: &mut Vec<NodeId>) {
-    let mut tmp: Vec<(String, NodeId)> = std::mem::take(descriptions)
-        .into_iter()
-        .zip(std::mem::take(node_ids))
-        .collect();
-
-    tmp.sort_unstable_by(|(ak, _), (bk, _)| ak.cmp(bk));
-
-    (*descriptions, *node_ids) = tmp.into_iter().collect();
-}
-
-async fn pactl_set_card_profile(id: String, profile: String) {
-    _ = tokio::process::Command::new("pactl")
-        .args(["set-card-profile", id.as_str(), profile.as_str()])
-        .status()
-        .await
-}
-
-fn pactl_set_default_sink(id: String) {
-    tokio::task::spawn(async move {
-        _ = tokio::process::Command::new("pactl")
-            .args(["set-default-sink", id.as_str()])
-            .status()
-            .await;
-    });
-}
-
-fn pactl_set_default_source(id: String) {
-    tokio::task::spawn(async move {
-        _ = tokio::process::Command::new("pactl")
-            .args(["set-default-source", id.as_str()])
-            .status()
-            .await;
-    });
-}
-
-fn wpctl_set_mute(id: u32, mute: bool) {
-    tokio::task::spawn(async move {
-        let default = id.to_string();
-        _ = tokio::process::Command::new("wpctl")
-            .args(["set-mute", default.as_str(), if mute { "1" } else { "0" }])
-            .status()
-            .await;
-    });
-}
-
-fn wpctl_set_volume(id: u32, volume: u32) {
-    tokio::task::spawn(async move {
-        let id = id.to_string();
-        let volume = format!("{}.{:02}", volume / 100, volume % 100);
-        _ = tokio::process::Command::new("wpctl")
-            .args(["set-volume", id.as_str(), volume.as_str()])
-            .status()
-            .await;
-    });
-}

@@ -1,4 +1,4 @@
-use cosmic::iced_core::{Alignment, Length};
+use cosmic::iced_core::{Alignment, Length, text::Wrapping};
 use cosmic::widget::icon::{from_name, icon};
 use cosmic::widget::{button, container, settings, text};
 use cosmic::{Apply, Element};
@@ -53,7 +53,7 @@ pub fn section() -> Section<crate::pages::Message> {
                     container(
                         cosmic::iced::widget::row![
                             cosmic::iced::widget::column![
-                                button::custom(
+                                button::custom_image_button(
                                     icon(
                                         if page.theme_manager.mode().is_dark {
                                             &dark_round_style
@@ -63,7 +63,8 @@ pub fn section() -> Section<crate::pages::Message> {
                                         .clone()
                                     )
                                     .width(Length::Fill)
-                                    .height(Length::Fixed(100.0))
+                                    .height(Length::Fixed(100.0)),
+                                    None
                                 )
                                 .selected(matches!(page.roundness, Roundness::Round))
                                 .class(button::ButtonClass::Image)
@@ -72,13 +73,13 @@ pub fn section() -> Section<crate::pages::Message> {
                                 .apply(container)
                                 .width(Length::Fixed(191.0))
                                 .class(style_container()),
-                                text::body(&descriptions[round])
+                                text::body(&descriptions[round]).wrapping(Wrapping::None)
                             ]
                             .spacing(8)
                             .width(Length::FillPortion(1))
                             .align_x(Alignment::Center),
                             cosmic::iced::widget::column![
-                                button::custom(
+                                button::custom_image_button(
                                     icon(
                                         if page.theme_manager.mode().is_dark {
                                             &dark_slightly_round_style
@@ -88,7 +89,8 @@ pub fn section() -> Section<crate::pages::Message> {
                                         .clone()
                                     )
                                     .width(Length::Fill)
-                                    .height(Length::Fixed(100.0))
+                                    .height(Length::Fixed(100.0)),
+                                    None
                                 )
                                 .selected(matches!(page.roundness, Roundness::SlightlyRound))
                                 .class(button::ButtonClass::Image)
@@ -97,13 +99,13 @@ pub fn section() -> Section<crate::pages::Message> {
                                 .apply(container)
                                 .width(Length::Fixed(191.0))
                                 .class(style_container()),
-                                text::body(&descriptions[slightly_round])
+                                text::body(&descriptions[slightly_round]).wrapping(Wrapping::None)
                             ]
                             .spacing(8)
                             .width(Length::FillPortion(1))
                             .align_x(Alignment::Center),
                             cosmic::iced::widget::column![
-                                button::custom(
+                                button::custom_image_button(
                                     icon(
                                         if page.theme_manager.mode().is_dark {
                                             &dark_square_style
@@ -113,7 +115,8 @@ pub fn section() -> Section<crate::pages::Message> {
                                         .clone()
                                     )
                                     .width(Length::Fill)
-                                    .height(Length::Fixed(100.0))
+                                    .height(Length::Fixed(100.0)),
+                                    None
                                 )
                                 .width(Length::FillPortion(1))
                                 .selected(matches!(page.roundness, Roundness::Square))
@@ -123,7 +126,7 @@ pub fn section() -> Section<crate::pages::Message> {
                                 .apply(container)
                                 .width(Length::Fixed(191.0))
                                 .class(style_container()),
-                                text::body(&descriptions[square])
+                                text::body(&descriptions[square]).wrapping(Wrapping::None)
                             ]
                             .spacing(8)
                             .align_x(Alignment::Center)

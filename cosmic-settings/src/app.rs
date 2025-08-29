@@ -95,6 +95,7 @@ impl SettingsApp {
             PageCommands::Displays => self.pages.page_id::<display::Page>(),
             #[cfg(feature = "wayland")]
             PageCommands::Dock => self.pages.page_id::<desktop::dock::Page>(),
+            PageCommands::DockApplet => self.pages.page_id::<desktop::dock::applets::Page>(),
             PageCommands::Firmware => self.pages.page_id::<system::firmware::Page>(),
             #[cfg(feature = "page-input")]
             PageCommands::Input => self.pages.page_id::<input::Page>(),
@@ -110,6 +111,9 @@ impl SettingsApp {
             PageCommands::Network => self.pages.page_id::<networking::Page>(),
             #[cfg(feature = "wayland")]
             PageCommands::Panel => self.pages.page_id::<desktop::panel::Page>(),
+            PageCommands::PanelApplet => {
+                self.pages.page_id::<desktop::panel::applets_inner::Page>()
+            }
             #[cfg(feature = "page-power")]
             PageCommands::Power => self.pages.page_id::<power::Page>(),
             #[cfg(feature = "page-region")]
@@ -849,12 +853,6 @@ impl cosmic::Application for SettingsApp {
                     new_theme.clone(),
                 )))
                 .map(Into::into),
-            );
-        }
-        if let Some(page) = self.pages.page_mut::<appearance::Page>() {
-            tasks.push(
-                page.update(appearance::Message::NewTheme(Box::new(new_theme.clone())))
-                    .map(Into::into),
             );
         }
 
