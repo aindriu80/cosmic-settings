@@ -1099,7 +1099,7 @@ impl Page {
 
                 task.arg("mode")
                     .arg("--adaptive-sync")
-                    .arg(format!("{}", mode))
+                    .arg(<&'static str>::from(mode))
                     .arg(name)
                     .arg(itoa::Buffer::new().format(current.size.0))
                     .arg(itoa::Buffer::new().format(current.size.1));
